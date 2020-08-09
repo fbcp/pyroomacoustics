@@ -1247,6 +1247,7 @@ class Room(object):
         figsize=None,
         no_axis=False,
         mic_marker_size=10,
+        fbcp_norm=False,
         **kwargs
     ):
         """ Plots the room with its walls, microphones, sources and images """
@@ -1337,9 +1338,17 @@ class Room(object):
                     H = np.abs(H) ** 2 / np.abs(H).max() ** 2
 
                     # a normalization factor according to room size
-                    norm = np.linalg.norm(
-                        (corners - self.mic_array.center), axis=0
-                    ).max()
+                    # or mic-source distance (custom fbcp)
+                    if (fbcp_norm is False):
+                        norm = np.linalg.norm(
+                            (corners - self.mic_array.center), axis=0
+                        ).max()
+                    else:
+                        norm = np.linalg.norm(
+                            np.reshape(self.sources[0].position,
+                                       self.mic_array.center.shape) -
+                            self.mic_array.center
+                        )
 
                     # plot all the beam patterns
                     i = 0
