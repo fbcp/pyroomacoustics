@@ -698,7 +698,7 @@ class Beamformer(MicrophoneArray):
         plt.title("Beamformer response")
         for hf in HF:
             if fbcp_dB is True:
-                plt.plot(self.frequencies, 10 * np.log10(np.abs(hf) +
+                plt.plot(self.frequencies, 20 * np.log10(np.abs(hf) +
                                                         constants.get("eps")))
                 plt.ylabel('dB')
             else:
