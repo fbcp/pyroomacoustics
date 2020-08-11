@@ -1248,6 +1248,7 @@ class Room(object):
         no_axis=False,
         mic_marker_size=10,
         fbcp_norm=False,
+        fbcp_circles=None,
         **kwargs
     ):
         """ Plots the room with its walls, microphones, sources and images """
@@ -1262,6 +1263,11 @@ class Room(object):
 
             warnings.warn("Matplotlib is required for plotting")
             return
+
+        # Honour circles input parameter if set, and otherwise set to
+        # default depending on normalisation parameter
+        if (fbcp_circles is None):
+            fbcp_circles = fbcp_norm
 
         if self.dim == 2:
             fig = plt.figure(figsize=figsize)
@@ -1356,6 +1362,17 @@ class Room(object):
                         x = np.cos(phis) * h * norm + self.mic_array.center[0, 0]
                         y = np.sin(phis) * h * norm + self.mic_array.center[1, 0]
                         ax.plot(x, y, "-", linewidth=0.5)
+
+                    # Add circles if required
+                    if (fbcp_circles is True):
+                        x = ((np.reshape(np.cos(phis) * norm, (len(phis), 1)) @
+                              np.reshape([1, 0.5, 0.1], (1, 3))) +
+                             self.mic_array.center[0, 0])
+                        y = ((np.reshape(np.sin(phis) * norm, (len(phis), 1)) @
+                              np.reshape([1, 0.5, 0.1], (1, 3))) +
+                             self.mic_array.center[1, 0])
+                        ax.plot(x, y, "k--", linewidth=0.1)
+                        ax.plot(x, y, "k--", linewidth=0.1)
 
             # define some markers for different sources and colormap for damping
             markers = ["o", "s", "v", "."]

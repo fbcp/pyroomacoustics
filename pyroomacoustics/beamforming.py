@@ -664,7 +664,8 @@ class Beamformer(MicrophoneArray):
 
         return self.frequencies[i_freq], bfresp
 
-    def plot_response_from_point(self, x, legend=None):
+    def plot_response_from_point(self, x, legend=None,
+                                 fbcp_attn=True, fbcp_dB=False):
 
         if self.weights is None and self.filters is not None:
             self.weights_from_filters()
@@ -689,17 +690,23 @@ class Beamformer(MicrophoneArray):
             for i, f in enumerate(self.frequencies):
                 r = np.dot(
                     H(self.weights[:, i]),
-                    self.steering_vector_2D_from_point(f, p, attn=True, ff=False),
+                    self.steering_vector_2D_from_point(f, p, attn=fbcp_attn, ff=False),
                 )
                 HF[k, i] = r[0]
 
         plt.subplot(2, 1, 1)
         plt.title("Beamformer response")
         for hf in HF:
-            plt.plot(self.frequencies, np.abs(hf))
-        plt.ylabel("Modulus")
+            if fbcp_dB is True:
+                plt.plot(self.frequencies, 10 * np.log10(np.abs(hf) +
+                                                        constants.get("eps")))
+                plt.ylabel('dB')
+            else:
+                plt.plot(self.frequencies, np.abs(hf))
+                plt.ylabel("Modulus")
         plt.axis("tight")
-        plt.legend(legend)
+        if (legend is not None):
+            plt.legend(legend)
 
         plt.subplot(2, 1, 2)
         for hf in HF:
@@ -707,7 +714,8 @@ class Beamformer(MicrophoneArray):
         plt.ylabel("Phase")
         plt.xlabel("Frequency [Hz]")
         plt.axis("tight")
-        plt.legend(legend)
+        if (legend is not None):
+            plt.legend(legend)
 
     def plot_beam_response(self):
 
