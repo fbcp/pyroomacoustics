@@ -780,6 +780,109 @@ class Beamformer(MicrophoneArray):
         plt.setp(plt.gca(), "yticks", yticks)
         plt.setp(plt.gca(), "yticklabels", np.arange(1, 5) * f_0)
 
+    def fbcp_plot_beam_response(self,
+                                freq=None,
+                                dB=True,
+                                surf=True,
+                                figsize=None):
+        """ Custom spatial response plots """
+
+        if self.weights is None and self.filters is not None:
+            self.weights_from_filters()
+        elif self.weights is None and self.filters is None:
+            raise NameError(
+                "Beamforming weights or filters need to be computed" " first."
+            )
+
+        phi = np.linspace(-np.pi, np.pi - np.pi / 180, 360)
+        if (freq is not None):
+            freq = np.array(freq).flatten()
+        else:
+            freq = self.frequencies
+
+        resp = np.zeros((freq.shape[0], phi.shape[0]), dtype=complex)
+        for i, f in enumerate(freq):
+            # For the moment assume that we are in 2D
+            resp[i, :] = np.dot(
+                H(self.weights[:, i]),
+                self.steering_vector_2D(f, phi, constants.get("ffdist")),
+            )
+        H_abs = np.abs(resp)
+        if dB:
+            H_abs = 20 * np.log10(H_abs + constants.get("eps"))
+            ylabel = 'dB'
+            zlabel = 'dB'  # For surface plot
+        else:
+            ylabel = 'resp'
+            zlabel = 'resp'  # For surface plot
+
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            import warnings
+
+            warnings.warn("Matplotlib is required for plotting")
+            return
+
+        if (surf is True):
+            # from mpl_toolkits import mplot3d
+
+            xx = np.outer(freq, np.ones(len(phi)))
+            yy = np.outer(np.ones(len(freq)), phi)
+
+            fig = plt.figure(figsize=figsize)
+            ax = plt.axes(projection='3d')
+
+            ax.plot_surface(xx, yy, H_abs, cmap='viridis', edgecolor='none')
+            # Inverse order on x axis
+            ax.set_xlim(max(freq), min(freq))
+            # Add title and labels
+            ax.set_title('Surface plot')
+            plt.xlabel("Freq [Hz]")
+            plt.ylabel("Angle [rad]")
+            ax.set_zlabel(zlabel)
+            # Change ticks and tick labels on azymuth axis
+            yticks = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]
+            for i, p in enumerate(yticks):
+                yticks[i] = phi[np.argmin(np.abs(p - phi))]
+
+            yticklabels = ["$-\pi$", "$-\pi/2$", "0", "$\pi/2$", "$\pi$"]
+            ax.set_yticks(yticks)
+            ax.set_yticklabels(yticklabels)
+
+        else:
+            # Create figure
+            fig = plt.figure()
+            ax = fig.add_axes([0, 0, 1, 1])  # , aspect="equal")
+
+            # define a new set of colors for the beam patterns
+            # (compliant with the colors used in the plot method of the
+            # Room class in 'room.py')
+            newmap = plt.get_cmap("autumn")
+            desat = 0.7
+            try:
+                # this is for matplotlib >= 2.0.0
+                ax.set_prop_cycle(
+                    color=[
+                        newmap(k) for k in desat * np.linspace(0, 1, len(freq))
+                    ]
+                )
+            except:
+                # keep this for backward compatibility
+                ax.set_color_cycle(
+                    [newmap(k) for k in desat * np.linspace(0, 1, len(freq))]
+                )
+
+            ax.plot(H_abs.T)
+            plt.xlabel("Angle [rad]")
+            xticks = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]
+            for i, p in enumerate(xticks):
+                xticks[i] = np.argmin(np.abs(p - phi))
+            xticklabels = ["$-\pi$", "$-\pi/2$", "0", "$\pi/2$", "$\pi$"]
+            plt.setp(plt.gca(), "xticks", xticks)
+            plt.setp(plt.gca(), "xticklabels", xticklabels)
+            plt.ylabel(ylabel)
+
     def snr(self, source, interferer, f, R_n=None, dB=False):
 
         i_f = np.argmin(np.abs(self.frequencies - f))
