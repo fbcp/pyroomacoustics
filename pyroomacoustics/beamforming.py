@@ -1081,16 +1081,28 @@ class Beamformer(MicrophoneArray):
         ).T
 
     def rake_delay_and_sum_weights(
-        self, source, interferer=None, R_n=None, attn=True, ff=False
+        self, source, interferer=None, R_n=None, attn=True, ff=False,
+        fbcp_norm=False
     ):
 
         self.weights = np.zeros((self.M, self.frequencies.shape[0]), dtype=complex)
 
         K = source.images.shape[1] - 1
 
+        if (K > 0) and (fbcp_norm is True):
+            raise ValueError(
+                "The custom normalisation condition only makes sense if there "
+                "is only one look direction."
+            )
+
         for i, f in enumerate(self.frequencies):
             W = self.steering_vector_2D_from_point(f, source.images, attn=attn, ff=ff)
             self.weights[:, i] = 1.0 / self.M / (K + 1) * np.sum(W, axis=1)
+            if (fbcp_norm is True):
+                look_dir_resp = np.dot(H(self.weights[:, i]), W)
+                # print('before :', look_dir_resp)
+                self.weights[:, i] = self.weights[:, i] / look_dir_resp
+                # print('after :', np.dot(H(self.weights[:, i]), W))
 
     def rake_one_forcing_weights(
         self, source, interferer=None, R_n=None, ff=False, attn=True
