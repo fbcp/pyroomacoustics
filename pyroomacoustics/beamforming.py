@@ -1082,7 +1082,7 @@ class Beamformer(MicrophoneArray):
 
     def rake_delay_and_sum_weights(
         self, source, interferer=None, R_n=None, attn=True, ff=False,
-        fbcp_norm=False
+        fbcp_phase_only=False, fbcp_norm=False
     ):
 
         self.weights = np.zeros((self.M, self.frequencies.shape[0]), dtype=complex)
@@ -1098,6 +1098,8 @@ class Beamformer(MicrophoneArray):
         for i, f in enumerate(self.frequencies):
             W = self.steering_vector_2D_from_point(f, source.images, attn=attn, ff=ff)
             self.weights[:, i] = 1.0 / self.M / (K + 1) * np.sum(W, axis=1)
+            if (fbcp_phase_only is True):
+                self.weights[:, i] = np.exp(1j * np.angle(self.weights[:, i]))
             if (fbcp_norm is True):
                 look_dir_resp = np.dot(H(self.weights[:, i]), W)
                 # print('before :', look_dir_resp)
