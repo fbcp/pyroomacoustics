@@ -1173,6 +1173,42 @@ class Beamformer(MicrophoneArray):
                 :, 0
             ]
 
+    def fbcp_mvdr_weights(self, source, phi, dist=None,
+                          rcond=constants.get("eps"), ff=False, attn=True):
+        ''' Custom freq-domain MVDR weights calcualtion method'''
+        # A few checks
+        assert (self.dim == 2), 'only 2D supported for now'
+        assert ((dist is not None) or
+                (ff is True)), 'not far-field, so dist must be specified'
+        assert (not ((ff is True) and
+                     (dist is not None))), 'far-field or dist? Not both!'
+        # Set distance if far-field
+        if (ff):
+            dist = constants.get("ffdist")
+        # Initialise weights
+        self.weights = np.zeros((self.M, self.frequencies.shape[0]),
+                                dtype=complex)
+        # Calculate look-direction steering vector for all freqs.
+        d = self.steering_vector_2D_from_point(self.frequencies,
+                                               source.images,
+                                               attn=attn, ff=ff)
+        for i, f in enumerate(self.frequencies):
+            # Calculate noise correlation matrix
+            R = np.zeros((self.M, self.M), dtype=complex)
+            for az in phi:
+                v = self.steering_vector_2D(f, az, dist, attn=attn)
+                R += np.inner(v, v.conj())
+            # Calculate inverse
+            R_inv = np.linalg.pinv(R + rcond * np.eye(self.M))
+            # Steering vector for this frequency
+            d_freq = d[:, i]
+            # Weights before normalisation
+            w = np.matmul(R_inv, d_freq)
+            # Normalisation factor
+            norm = np.matmul(H(d_freq), w)
+            # Final weights
+            self.weights[:, i] = w.flatten() / norm
+
     def rake_max_udr_weights(
         self, source, interferer=None, R_n=None, ff=False, attn=True
     ):
