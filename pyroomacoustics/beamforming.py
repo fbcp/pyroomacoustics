@@ -1576,3 +1576,26 @@ class Beamformer(MicrophoneArray):
         denom = np.dot(np.dot(g_val.T, K_nq), g_val)
 
         return num / denom
+
+    # Custom performance metrics methods
+    def fbcp_plot_white_noise_gain(self, dB=True):
+        ''' Custom method for white-noise-gain plot, linear or dB domain'''
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            import warnings
+
+            warnings.warn("Matplotlib is required for plotting")
+            return
+
+        wng = np.linalg.norm(self.weights, ord=2, axis=0)
+        if (dB):
+            wng = 20 * np.log10(wng)
+            ylabel = '[dB]'
+        else:
+            ylabel = 'l2 norm'
+        plt.plot(self.frequencies, wng)
+        plt.ylabel(ylabel)
+        plt.xlabel("Frequency [Hz]")
+        plt.axis("tight")
+        plt.title('White noise gain')
