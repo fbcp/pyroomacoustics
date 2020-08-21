@@ -1578,6 +1578,8 @@ class Beamformer(MicrophoneArray):
         return num / denom
 
     # Custom performance metrics methods
+    ####################################
+
     def fbcp_plot_white_noise_gain(self, dB=True):
         ''' Custom method for white-noise-gain plot, linear or dB domain'''
         try:
@@ -1599,3 +1601,77 @@ class Beamformer(MicrophoneArray):
         plt.xlabel("Frequency [Hz]")
         plt.axis("tight")
         plt.title('White noise gain')
+        return(wng)
+
+    def fbcp_plot_array_gain(self, source, phi,
+                             dist=None, ff=True, attn=False, dB=True,
+                             perturb_dB=None, perturb_n=0):
+        ''' Custom array-gain plot method - supports random perturbations'''
+        # A few checks
+        assert (self.dim == 2), 'only 2D supported for now'
+        assert ((dist is not None) or
+                (ff is True)), 'not far-field, so dist must be specified'
+        assert (not ((ff is True) and
+                     (dist is not None))), 'far-field or dist? Not both!'
+        assert ((perturb_n == 0) or
+                (perturb_dB is not None)), 'perturb_dB not specified'
+        K = source.images.shape[1] - 1
+        assert (K == 0), 'multiple sources not supported (yet)'
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            import warnings
+
+            warnings.warn("Matplotlib is required for plotting")
+            return
+        # Set distance if far-field
+        if (ff):
+            dist = constants.get("ffdist")
+        if (perturb_n == 0):
+            perturb_dB = None
+        # Initialise array gain
+        array_gain = np.zeros((self.frequencies.shape[0], 1 + perturb_n))
+        # Calculate look-direction steering vector for all freqs.
+        d = self.steering_vector_2D_from_point(self.frequencies,
+                                               source.images,
+                                               attn=attn, ff=ff)
+        # First-mic weights
+        w_mic = np.insert(np.zeros(self.M - 1), 0, 1)
+        # max range of random perturbations
+        if (perturb_dB is not None):
+            m = 10 ** (perturb_dB / 20) - 1
+        else:
+            m = 0
+        # Loop on freqs
+        for i, f in enumerate(self.frequencies):
+            # Calculate SNR at output of beamformer and single mic
+            d_freq = d[:, i]
+            w = self.weights[:, i]
+            gain_freq = np.zeros(1 + perturb_n)
+            for n in range(1 + perturb_n):
+                # Random perturbation with std equal to perturb_dB
+                r = np.random.uniform(low=(1 - m), high=(1 + m), size=self.M)
+                # response to signal and noise for both array and mic
+                bf_s = abs(np.dot(H(w), d_freq * r)) ** 2
+                mic_s = abs(np.dot(H(w_mic), d_freq * r)) ** 2
+                R = np.zeros((self.M, self.M), dtype=complex)
+                for az in phi:
+                    v = self.steering_vector_2D(f, az, dist, attn=attn)
+                    v = v * np.reshape(r, (len(r), 1))
+                    R += np.inner(v, v.conj())
+                bf_n = abs(np.matmul(H(w), np.matmul(R, w)))
+                mic_n = abs(np.matmul(H(w_mic), np.matmul(R, w_mic)))
+                gain_freq[n] = (bf_s / bf_n) / (mic_s / mic_n)
+                array_gain[i, n] = gain_freq[n]
+
+        if (dB):
+            array_gain = 20 * np.log10(array_gain)
+            ylabel = 'dB'
+        else:
+            ylabel = 'linear'
+        plt.plot(self.frequencies, array_gain)
+        plt.ylabel(ylabel)
+        plt.xlabel("Frequency [Hz]")
+        plt.axis("tight")
+        plt.title('Array gain')
+        return(array_gain)
