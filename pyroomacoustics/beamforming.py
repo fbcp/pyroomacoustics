@@ -1647,7 +1647,6 @@ class Beamformer(MicrophoneArray):
             # Calculate SNR at output of beamformer and single mic
             d_freq = d[:, i]
             w = self.weights[:, i]
-            gain_freq = np.zeros(1 + perturb_n)
             for n in range(1 + perturb_n):
                 # Random perturbation with std equal to perturb_dB
                 r = np.random.uniform(low=(1 - m), high=(1 + m), size=self.M)
@@ -1658,12 +1657,12 @@ class Beamformer(MicrophoneArray):
                 for az in phi:
                     v = self.steering_vector_2D(f, az, dist, attn=attn)
                     v = v * np.reshape(r, (len(r), 1))
+                    assert (v.shape == (self.M, 1)), 'wrong shape'
                     R += np.inner(v, v.conj())
+                R /= len(phi)
                 bf_n = abs(np.matmul(H(w), np.matmul(R, w)))
                 mic_n = abs(np.matmul(H(w_mic), np.matmul(R, w_mic)))
-                gain_freq[n] = (bf_s / bf_n) / (mic_s / mic_n)
-                array_gain[i, n] = gain_freq[n]
-
+                array_gain[i, n] = (bf_s / bf_n) / (mic_s / mic_n)
         if (dB):
             array_gain = 20 * np.log10(array_gain)
             ylabel = 'dB'
@@ -1675,3 +1674,144 @@ class Beamformer(MicrophoneArray):
         plt.axis("tight")
         plt.title('Array gain')
         return(array_gain)
+
+    def fbcp_plot_directivity_index(self, source, res_deg=10,
+                                    dist=None, ff=True, attn=False, dB=True,
+                                    perturb_dB=None, perturb_n=0):
+        ''' Custom array-gain plot method - supports random perturbations'''
+        # A few checks
+        assert (self.dim == 2), 'only 2D supported for now'
+        assert ((dist is not None) or
+                (ff is True)), 'not far-field, so dist must be specified'
+        assert (not ((ff is True) and
+                     (dist is not None))), 'far-field or dist? Not both!'
+        assert ((perturb_n == 0) or
+                (perturb_dB is not None)), 'perturb_dB not specified'
+        K = source.images.shape[1] - 1
+        assert (K == 0), 'multiple sources not supported (yet)'
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            import warnings
+
+            warnings.warn("Matplotlib is required for plotting")
+            return
+        # Set distance if far-field
+        if (ff):
+            dist = constants.get("ffdist")
+        if (perturb_n == 0):
+            perturb_dB = None
+        # Set of azimuths: spherical isotropic
+        phi = np.linspace(-np.pi, np.pi - np.pi / 180, int(360 / res_deg))
+        # Initialise array gain
+        dir_index = np.zeros((self.frequencies.shape[0], 1 + perturb_n))
+        # Calculate look-direction steering vector for all freqs.
+        d = self.steering_vector_2D_from_point(self.frequencies,
+                                               source.images,
+                                               attn=attn, ff=ff)
+        # max range of random perturbations
+        if (perturb_dB is not None):
+            m = 10 ** (perturb_dB / 20) - 1
+        else:
+            m = 0
+        # Loop on freqs
+        for i, f in enumerate(self.frequencies):
+            # Calculate SNR at output of beamformer and single mic
+            d_freq = d[:, i]
+            w = self.weights[:, i]
+            for n in range(1 + perturb_n):
+                # Random perturbation with std equal to perturb_dB
+                r = np.random.uniform(low=(1 - m), high=(1 + m), size=self.M)
+                # response to signal and noise for both array and mic
+                bf_s = abs(np.dot(H(w), d_freq * r)) ** 2
+                R = np.zeros((self.M, self.M), dtype=complex)
+                for az in phi:
+                    v = self.steering_vector_2D(f, az, dist, attn=attn)
+                    v = v * np.reshape(r, (len(r), 1))
+                    assert (v.shape == (self.M, 1)), 'wrong shape'
+                    R += np.inner(v, v.conj())
+                R /= len(phi)
+                bf_n = abs(np.matmul(H(w), np.matmul(R, w)))
+                dir_index[i, n] = (bf_s / bf_n)
+        if (dB):
+            dir_index = 20 * np.log10(dir_index)
+            ylabel = 'dB'
+            title = 'Directivity index'
+        else:
+            ylabel = 'linear'
+            title = 'Directivity factor'
+        plt.plot(self.frequencies, dir_index)
+        plt.ylabel(ylabel)
+        plt.xlabel("Frequency [Hz]")
+        plt.axis("tight")
+        plt.title(title)
+        return(dir_index)
+
+    def fbcp_plot_good_bad_ratio(self, phi_good, phi_bad,
+                                 dist=None, ff=True, attn=False, dB=True,
+                                 perturb_dB=None, perturb_n=0):
+        ''' Custom good-bad ratio plot - supports random perturbations'''
+        # A few checks
+        assert (self.dim == 2), 'only 2D supported for now'
+        assert ((dist is not None) or
+                (ff is True)), 'not far-field, so dist must be specified'
+        assert (not ((ff is True) and
+                     (dist is not None))), 'far-field or dist? Not both!'
+        assert ((perturb_n == 0) or
+                (perturb_dB is not None)), 'perturb_dB not specified'
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            import warnings
+
+            warnings.warn("Matplotlib is required for plotting")
+            return
+        # Set distance if far-field
+        if (ff):
+            dist = constants.get("ffdist")
+        if (perturb_n == 0):
+            perturb_dB = None
+        # Initialise
+        ratio = np.zeros((self.frequencies.shape[0], 1 + perturb_n))
+        # max range of random perturbations
+        if (perturb_dB is not None):
+            m = 10 ** (perturb_dB / 20) - 1
+        else:
+            m = 0
+        # Loop on freqs
+        for i, f in enumerate(self.frequencies):
+            w = self.weights[:, i]
+            for n in range(1 + perturb_n):
+                # Random perturbation with std equal to perturb_dB
+                r = np.random.uniform(low=(1 - m), high=(1 + m), size=self.M)
+                # Good and bad spatial correlation matrices
+                R_good = np.zeros((self.M, self.M), dtype=complex)
+                for az in phi_good:
+                    v = self.steering_vector_2D(f, az, dist, attn=attn)
+                    v = v * np.reshape(r, (len(r), 1))
+                    assert (v.shape == (self.M, 1)), 'wrong shape'
+                    R_good += np.inner(v, v.conj())
+                R_good /= len(phi_good)
+                bf_good = abs(np.matmul(H(w), np.matmul(R_good, w)))
+                R_bad = np.zeros((self.M, self.M), dtype=complex)
+                for az in phi_bad:
+                    v = self.steering_vector_2D(f, az, dist, attn=attn)
+                    v = v * np.reshape(r, (len(r), 1))
+                    assert (v.shape == (self.M, 1)), 'wrong shape'
+                    R_bad += np.inner(v, v.conj())
+                R_bad /= len(phi_bad)
+                bf_bad = abs(np.matmul(H(w), np.matmul(R_bad, w)))
+                # Ratio
+                ratio[i, n] = bf_good / bf_bad
+
+        if (dB):
+            ratio = 20 * np.log10(ratio)
+            ylabel = 'dB'
+        else:
+            ylabel = 'linear'
+        plt.plot(self.frequencies, ratio)
+        plt.ylabel(ylabel)
+        plt.xlabel("Frequency [Hz]")
+        plt.axis("tight")
+        plt.title("good-bad ratio")
+        return(ratio)
