@@ -1209,6 +1209,56 @@ class Beamformer(MicrophoneArray):
             # Final weights
             self.weights[:, i] = w.flatten() / norm
 
+    def fbcp_differential_weights(self, source, beta=0, norm=True):
+        ''' Custom differential array weights calculation.
+            beta is the factor applied to the BACK cardioid
+            (beta=0 for front cardioid, beta=np.Infinity for back cardioid).
+            norm normalises with distortionless response in the look direction
+            (or in the opposite direction in the case of the back cardioid).
+        '''
+        # A few checks
+        assert (self.M == 2), 'only dual-mic array supported for now'
+        # We'll get the delay from the look direction steering vector
+        d_front = self.steering_vector_2D_from_point(self.frequencies,
+                                                     source.images,
+                                                     attn=False, ff=True)
+        # flip it along the mics to have the steering vector in the
+        # opposite direction
+        d_back = np.flip(d_front, axis=0)
+        # The weights of one of the mics should be straight 1s
+        straight_ones = np.all(d_back == 1, axis=1)
+        assert (np.sum(straight_ones) == 1), 'pb with steering vectors'
+        # Initialise weights for front and back cardioids
+        front_weights = np.zeros((self.M, self.frequencies.shape[0]),
+                                 dtype=complex)
+        back_weights = np.zeros((self.M, self.frequencies.shape[0]),
+                                dtype=complex)
+        # Use steering vector to place a null in the back direction
+        for mic in range(self.M):
+            if (straight_ones[mic]):
+                front_weights[mic, :] = 1
+                back_weights[mic, :] = -d_front[mic, :]
+            else:
+                # self.weights[mic, :] = -np.exp(1j * np.angle(d[mic, :]))
+                front_weights[mic, :] = -d_back[mic, :]
+                back_weights[mic, :] = 1
+        # Combine
+        if (beta == np.Infinity):
+            self.weights = back_weights
+        else:
+            self.weights = front_weights - beta * back_weights
+        # Normalise so that the response in the look direction is 1
+        # Except for the back cardioid - normalise with the opposite direction
+        # in that case
+        if (norm):
+            if (beta == np.Infinity):
+                d = d_back
+            else:
+                d = d_front
+            for i, f in enumerate(self.frequencies):
+                r = np.dot(H(self.weights[:, i]), d[:, i])
+                self.weights[:, i] /= (r + constants.get("eps"))
+
     def rake_max_udr_weights(
         self, source, interferer=None, R_n=None, ff=False, attn=True
     ):
