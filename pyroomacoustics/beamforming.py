@@ -1630,7 +1630,7 @@ class Beamformer(MicrophoneArray):
     # Custom performance metrics methods
     ####################################
 
-    def fbcp_plot_white_noise_gain(self, dB=True):
+    def fbcp_plot_white_noise_gain(self, source, ff=True, attn=False, dB=True):
         ''' Custom method for white-noise-gain plot, linear or dB domain'''
         try:
             import matplotlib.pyplot as plt
@@ -1639,8 +1639,17 @@ class Beamformer(MicrophoneArray):
 
             warnings.warn("Matplotlib is required for plotting")
             return
-
-        wng = np.linalg.norm(self.weights, ord=2, axis=0)
+        d = self.steering_vector_2D_from_point(self.frequencies,
+                                               source.images,
+                                               attn=attn, ff=ff)
+        resp = np.zeros(self.frequencies.shape[0])
+        # Loop on freqs
+        for i, f in enumerate(self.frequencies):
+            # Calculate SNR at output of beamformer and single mic
+            d_freq = d[:, i]
+            w = self.weights[:, i]
+            resp[i] = abs(np.dot(H(w), d_freq))
+        wng = resp / np.linalg.norm(self.weights, ord=2, axis=0)
         if (dB):
             wng = 20 * np.log10(wng)
             ylabel = '[dB]'
