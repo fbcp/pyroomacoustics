@@ -696,24 +696,29 @@ class Beamformer(MicrophoneArray):
 
         plt.subplot(2, 1, 1)
         plt.title("Beamformer response")
+        # For this plot I don't want the freq at 0Hz because
+        # the scale of white noise gain will dwarf the scale.
+        nz = np.nonzero(self.frequencies)
         for hf in HF:
             if fbcp_dB is True:
-                plt.plot(self.frequencies, 20 * np.log10(np.abs(hf) +
+                plt.plot(self.frequencies[nz], 20 * np.log10(np.abs(hf[nz]) +
                                                         constants.get("eps")))
                 plt.ylabel('dB')
             else:
-                plt.plot(self.frequencies, np.abs(hf))
+                plt.plot(self.frequencies[nz], np.abs(hf[nz]))
                 plt.ylabel("Modulus")
         plt.axis("tight")
+        plt.grid()
         if (legend is not None):
             plt.legend(legend)
 
         plt.subplot(2, 1, 2)
         for hf in HF:
-            plt.plot(self.frequencies, np.unwrap(np.angle(hf)))
+            plt.plot(self.frequencies[nz], np.unwrap(np.angle(hf[nz])))
         plt.ylabel("Phase")
         plt.xlabel("Frequency [Hz]")
         plt.axis("tight")
+        plt.grid()
         if (legend is not None):
             plt.legend(legend)
 
@@ -1644,6 +1649,9 @@ class Beamformer(MicrophoneArray):
                                                attn=attn, ff=ff)
         resp = np.zeros(self.frequencies.shape[0])
         # Loop on freqs
+        #print(self.frequencies)
+        #freqs = [num for num in self.frequencies if num]
+        #print(freqs)
         for i, f in enumerate(self.frequencies):
             # Calculate SNR at output of beamformer and single mic
             d_freq = d[:, i]
@@ -1651,11 +1659,14 @@ class Beamformer(MicrophoneArray):
             resp[i] = abs(np.dot(H(w), d_freq))
         wng = resp / np.linalg.norm(self.weights, ord=2, axis=0)
         if (dB):
-            wng = 20 * np.log10(wng)
+            wng = 20 * np.log10(wng + constants.get("eps"))
             ylabel = '[dB]'
         else:
             ylabel = 'l2 norm'
-        plt.plot(self.frequencies, wng)
+        # For this plot I don't want the freq at 0Hz because
+        # the scale of white noise gain will dwarf the scale.
+        nz = np.nonzero(self.frequencies)
+        plt.plot(self.frequencies[nz], wng[nz])
         plt.ylabel(ylabel)
         plt.xlabel("Frequency [Hz]")
         plt.axis("tight")
