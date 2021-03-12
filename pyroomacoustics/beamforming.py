@@ -1105,6 +1105,9 @@ class Beamformer(MicrophoneArray):
             self.weights[:, i] = 1.0 / self.M / (K + 1) * np.sum(W, axis=1)
             if (fbcp_phase_only is True):
                 self.weights[:, i] = np.exp(1j * np.angle(self.weights[:, i]))
+                # Divide by the number of mics to ensure distortionless
+                # response in the look direction.
+                self.weights[:, i] = self.weights[:, i] / self.weights.shape[0]
             if (fbcp_norm is True):
                 look_dir_resp = np.dot(H(self.weights[:, i]), W)
                 # print('before :', look_dir_resp)
@@ -1187,6 +1190,7 @@ class Beamformer(MicrophoneArray):
                 (ff is True)), 'not far-field, so dist must be specified'
         assert (not ((ff is True) and
                      (dist is not None))), 'far-field or dist? Not both!'
+
         # Set distance if far-field
         if (ff):
             dist = constants.get("ffdist")
