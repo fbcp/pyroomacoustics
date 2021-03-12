@@ -1268,6 +1268,28 @@ class Beamformer(MicrophoneArray):
                 r = np.dot(H(self.weights[:, i]), d[:, i])
                 self.weights[:, i] /= (r + constants.get("eps"))
 
+    def fbcp_phase_correction(self):
+        ''' Phase correction on beamforming weights.
+            Uses the mic with minimum phase (front mic).
+            See 'bf_coeffs_phase' notebook for discussion.
+        '''
+        front_mic = self.fbcp_find_mic_min_phase()
+        # print('front mic:', front_mic)
+        self.weights = (self.weights /
+                        np.exp(1j * np.angle(self.weights[front_mic, :])))
+
+    def fbcp_find_mic_min_phase(self):
+        ''' Util returning mic with minimum weights' phase
+            (front mic). Used by fbcp_phase_correction method.
+            See 'bf_coeffs_phase' notebook for discussion.
+        '''
+        # Make sure the mics correspond to rows
+        assert (self.weights.shape[0] < self.weights.shape[1])
+        phase = np.unwrap(np.angle(self.weights), axis=1)
+        # plt.plot(np.transpose(phase))
+        # plt.show()
+        return(np.argmin(np.sum(phase, axis=1)))
+
     def rake_max_udr_weights(
         self, source, interferer=None, R_n=None, ff=False, attn=True
     ):
